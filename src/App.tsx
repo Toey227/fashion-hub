@@ -6,6 +6,8 @@ import Collection from "./pages/Collection";
 import About from "./pages/About";
 import MixMatch from "./pages/MixMatch";
 import CategoryProducts from './pages/CategoryProducts';
+import Cart from './pages/Cart';
+import Checkout from './pages/Checkout';
 
 
 // สร้างตัวจัดการ API
@@ -30,6 +32,7 @@ export default function App() {
               <li><Link to="/collection" className="hover:text-primary transition-colors">My Collection</Link></li>
               <li><Link to="/mix-match" className="hover:text-primary transition-colors">Mix & Match</Link></li>
               <li><Link to="/about" className="hover:text-primary transition-colors">About Us</Link></li>
+              <li><Link to="/cart">🛒 Cart</Link></li>
             </ul>
           </div>
 
@@ -43,6 +46,8 @@ export default function App() {
             <Route path="/about" element={<About />} />
             <Route path="/mix-match" element={<MixMatch />} />
             <Route path="/category/:categoryName" element={<CategoryProducts />} />
+            <Route path="/cart" element={<Cart />} />
+            <Route path="/checkout" element={<Checkout />} />
           </Routes>
         </main>
       </BrowserRouter>
