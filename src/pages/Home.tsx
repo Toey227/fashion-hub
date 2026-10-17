@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useStore } from '../store/useStore';
+import { useMemo } from 'react';
 
 interface Product {
   id: number;
@@ -21,21 +22,35 @@ export default function Home() {
     queryFn: () => fetch('http://localhost:3000/products').then(res => res.json())
   });
 
+
+  const products: Product[] = Array.isArray(data) ? data : (data?.products || []);
+
+  const { seasonalProducts, popularProducts } = useMemo(() => {
+
+    if (products.length === 0) return { seasonalProducts: [], popularProducts: [] };
+
+    const shuffled = [...products].sort(() => 0.5 - Math.random());
+    return {
+      seasonalProducts: shuffled.slice(0, 3),
+      popularProducts: shuffled.slice(3, 6)
+    };
+  }, [products]);
+
   if (isLoading) return <div className="p-20 text-center flex justify-center"><span className="loading loading-spinner loading-lg"></span></div>;
   if (error || !data) return <div className="p-20 text-center text-red-500 text-xl">ไม่สามารถโหลดข้อมูลสินค้าได้</div>;
 
-  // 🌟 ป้องกัน Error โดยเช็คว่า data เป็น Array ตรงๆ หรือมี .products ห่ออยู่
-  const products: Product[] = Array.isArray(data) ? data : (data.products || []);
 
-  const tops = products.filter(p => p.category === 'Tops').slice(0, 3);
-  const bottoms = products.filter(p => p.category === 'Bottoms').slice(0, 3);
-  const accessories = products.filter(p => p.category === 'Accessories').slice(0, 3);
 
   const renderProductCard = (item: Product) => {
     const isSaved = collection.some(p => p.id === item.id);
     return (
-      <div key={item.id} className="card bg-base-100 shadow-xl border border-base-200 relative pt-4 px-4 hover:shadow-2xl transition-all duration-300">
-        <button 
+      <div key={item.id} className="card bg-base-100 shadow-xl border border-base-200 relative pt-4 px-4 hover:shadow-2xl transition-all duration-300 group overflow-hidden">
+
+
+        <Link to={`/product/${item.id}`} className="absolute inset-0 z-10"></Link>
+
+        {/* ปุ่มหัวใจ */}
+        <button
           className="btn btn-circle btn-sm bg-white/80 hover:bg-white text-gray-700 border-none absolute top-6 right-6 z-20 shadow-md"
           onClick={() => toggleCollection(item)}
           title="Save to Collection"
@@ -43,85 +58,105 @@ export default function Home() {
           {isSaved ? <span className="text-red-500">❤️</span> : <span>🤍</span>}
         </button>
 
-        <figure>
-          <img src={item.image} alt={item.title} className="rounded-xl h-72 object-cover w-full" />
+        <figure className="overflow-hidden rounded-xl">
+          <img src={item.image} alt={item.title} className="rounded-xl h-[400px] object-cover w-full group-hover:scale-105 transition-transform duration-500" />
         </figure>
-        
+
         <div className="card-body items-center text-center p-6">
           <div className="badge badge-secondary mb-2">{item.category}</div>
-          <h2 className="card-title text-lg">{item.title}</h2>
-          <p className="text-2xl font-bold text-primary my-2">฿{item.price}</p>
-          <div className="card-actions w-full mt-2 flex flex-col gap-2">
-            <button className="btn btn-primary w-full btn-sm">Add to Cart</button>
-            <Link to={`/product/${item.id}`} className="btn btn-outline w-full btn-sm">View Details</Link>
-          </div>
+          <h2 className="card-title text-lg text-base-content group-hover:text-[#C88A76] transition-colors">{item.title}</h2>
+          <p className="text-sm text-base-content/60 line-clamp-2 mt-2 px-2">
+            {item.description}
+          </p>
+
+          <p className="text-2xl font-bold text-primary my-2 font-sans">฿{item.price}</p>
         </div>
       </div>
     );
   };
 
   return (
-    <div className="min-h-screen bg-base-200/50 pb-16">
-      {/* Hero Banner */}
-      <div className="hero bg-base-200 py-16 px-8 mb-12">
-        <div className="hero-content flex-col lg:flex-row-reverse gap-12 max-w-6xl mx-auto">
-          <img 
-            src="https://images.unsplash.com/photo-1529139574466-a303027c1d8b?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=NHwxMjA3fDA%3D" 
-            className="max-w-sm rounded-2xl shadow-2xl object-cover h-80 w-72" 
-            alt="Hero Banner"
+    <div className="min-h-screen bg-base-100 pb-16 transition-colors duration-300">
+
+      {/* 🌟 Hero Section */}
+      <div className="flex flex-col md:flex-row w-full h-[500px] bg-base-100 mb-12 transition-colors duration-300">
+        <div className="bg-[#2A2A2A] text-white p-12 md:w-2/5 flex flex-col justify-center">
+          <p className="text-[#C88A76] text-xs font-serif font-bold tracking-[0.2em] mb-4 uppercase">
+            New Collection
+          </p>
+          <h1 className="text-4xl md:text-5xl font-serif mb-4 leading-tight">
+            Welcome To<br />Fashion Hub
+          </h1>
+          <p className="text font-serif -gray-400 text-sm mb-8 leading-relaxed max-w-sm">
+            Discover your perfect style with our curated collection of premium fashion pieces.
+          </p>
+          <Link to="/mix-match" className="bg-[#C88A76] text-white font-serif px-8 py-3 text-sm font-medium w-fit hover:bg-[#b57a66] transition-colors inline-block text-center">
+            Shop Now
+          </Link>
+        </div>
+
+        <div className="md:w-3/5 h-full">
+          <img
+            src="https://images.unsplash.com/photo-1764264829660-e9de50fc127d?q=80&w=764&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=NHwxMjA3fDA%3D"
+            alt="Fashion Model"
+            className="w-full h-full object-cover object-center"
           />
-          <div>
-            <span className="badge badge-primary mb-4">NEW COLLECTION</span>
-            <h1 className="text-5xl font-bold mb-4">Welcome to Fashion Hub</h1>
-            <p className="py-2 text-gray-600 text-lg max-w-xl">
-              ค้นหาสไตล์ที่เป็นคุณ อัปเดตเทรนด์แฟชั่นล่าสุด มิกซ์แอนด์แมตช์เสื้อผ้าได้ดั่งใจ พร้อมให้คุณเป็นเจ้าของแล้ววันนี้
-            </p>
-            <Link to="/mix-match" className="btn btn-primary mt-4">ลอง Mix & Match เลย →</Link>
-          </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 space-y-16">
-        
-        {/* Tops */}
+
+      <div className="max-w-7xl mx-auto px-6 space-y-20 pt-8 pb-16">
         <section>
-          <div className="flex justify-between items-end mb-6">
-            <div>
-              <h2 className="text-3xl font-bold">Top Wear</h2>
-              <p className="text-gray-500">เสื้อผ้าสไตล์มินิมอล ใส่ได้ทุกวัน</p>
+          <div className="flex justify-between items-end mb-8 border-b-2 border-[#E5E7EB] pb-4">
+            <div className="flex items-center gap-3">
+              <span className="text-4xl text-amber-500 animate-pulse">⚡</span>
+              <div>
+                <h2 className="text-4xl font-black italic tracking-tight bg-gradient-to-r from-amber-500 to-red-500 bg-clip-text text-transparent uppercase drop-shadow-sm">
+                  Seasonal Collection
+                </h2>
+                <p className="text-base-content/70 mt-1 font-medium">✨ อัปเดตลุคใหม่ประจำฤดูกาล ห้ามพลาด!</p>
+              </div>
             </div>
-            <Link to="/category/Tops" className="btn btn-ghost btn-sm font-semibold text-primary"> Viwe All →</Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {tops.map(renderProductCard)}
+            {seasonalProducts.map(renderProductCard)}
           </div>
         </section>
 
-        {/* Bottoms */}
         <section>
-          <div className="flex justify-between items-end mb-6">
-            <div>
-              <h2 className="text-3xl font-bold">Bottoms & Skirts</h2>
-              <p className="text-gray-500">กางเกงและกระโปรงทรงสวย แมตช์ง่าย</p>
+          <div className="flex justify-between items-end mb-8 border-b-2 border-[#E5E7EB] pb-4">
+            <div className="flex items-center gap-3">
+              <span className="text-4xl text-red-500 animate-bounce">🔥</span>
+              <div>
+                <h2 className="text-4xl font-black italic tracking-tight bg-gradient-to-r from-red-500 to-rose-600 bg-clip-text text-transparent uppercase drop-shadow-sm">
+                  Popular Trending
+                </h2>
+                <p className="text-base-content/70 mt-1 font-medium">💥 ฮอตฮิตติดเทรนด์ ไอเทมยอดนิยมที่ใครๆ ก็ต้องมี!</p>
+              </div>
             </div>
-            <Link to="/category/Bottoms" className="btn btn-ghost btn-sm font-semibold text-primary"> Viwe All →</Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {bottoms.map(renderProductCard)}
+            {popularProducts.map(renderProductCard)}
           </div>
         </section>
 
-        {/* Accessories */}
-        <section>
-          <div className="flex justify-between items-end mb-6">
-            <div>
-              <h2 className="text-3xl font-bold">Accessories & Shoes</h2>
-              <p className="text-gray-500">เติมเต็มลุคให้สมบูรณ์แบบด้วยแอคเซสเซอรี</p>
+        <section className="mt-16 pt-8">
+          <div className="flex justify-between items-end mb-8 border-b-2 border-base-200 pb-4">
+            <div className="flex items-center gap-3">
+              <span className="text-4xl">🛍️</span>
+              <div>
+                <h2 className="text-4xl font-serif font-black uppercase tracking-tight text-base-content">
+                  All Products
+                </h2>
+                <p className="text-base-content/70 mt-1 font-medium">
+                  ค้นหาสไตล์ที่ใช่จากสินค้าทั้งหมดของเรา
+                </p>
+              </div>
             </div>
-            <Link to="/category/Accessories" className="btn btn-ghost btn-sm font-semibold text-primary"> Viwe All →</Link>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {accessories.map(renderProductCard)}
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            {products.map(renderProductCard)}
           </div>
         </section>
 
@@ -129,3 +164,4 @@ export default function Home() {
     </div>
   );
 }
+

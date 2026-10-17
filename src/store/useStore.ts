@@ -1,7 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist } from 'zustand/middleware'; 
 
-// โครงสร้างข้อมูลสินค้า
 export interface Product {
   id: number;
   title: string;
@@ -10,34 +9,66 @@ export interface Product {
   image: string;
   description: string;
   rating: number;
+  variants?: string[]; 
 }
 
-// กำหนดว่าใน Store เราจะเก็บข้อมูลอะไรบ้าง
-interface AppState {
-  collection: Product[]; // เก็บรายการสินค้าที่กดหัวใจ
-  toggleCollection: (product: Product) => void; // ฟังก์ชันกดเพิ่ม/ลบ หัวใจ
+export interface CartItem extends Product {
+  cartItemId: string;
+  quantity: number;
+  size: string;
+  color?: string;
+  selectedImage?: string;
 }
 
-export const useStore = create<AppState>()(
+interface StoreState {
+  collection: Product[];
+  toggleCollection: (item: Product) => void;
+  
+  cart: CartItem[];
+  addToCart: (item: Product, qty: number, size: string, color: string, selectedImage: string) => void; 
+  removeFromCart: (cartItemId: string) => void;
+  updateQuantity: (cartItemId: string, qty: number) => void;
+  removeCheckoutItems: (cartItemIds: string[]) => void; // 🌟 เพิ่มคำสั่งลบเฉพาะชิ้น
+}
+
+export const useStore = create<StoreState>()(
   persist(
     (set) => ({
-      collection: [], // เริ่มต้นคอลเลกชันเป็นค่าว่าง
-      
-      // ฟังก์ชันสลับสถานะ: ถ้ามีในคอลเลกชันแล้วให้ลบออก ถ้ายังไม่มีให้เพิ่มเข้าไป
-      toggleCollection: (product) => 
-        set((state) => {
-          const isExist = state.collection.some((p) => p.id === product.id);
-          if (isExist) {
-            // ลบออก
-            return { collection: state.collection.filter((p) => p.id !== product.id) };
-          } else {
-            // เพิ่มเข้า
-            return { collection: [...state.collection, product] };
-          }
-        }),
+      collection: [],
+      toggleCollection: (item) => set((state) => {
+        const isSaved = state.collection.some((p) => p.id === item.id);
+        if (isSaved) {
+          return { collection: state.collection.filter((p) => p.id !== item.id) };
+        }
+        return { collection: [...state.collection, item] };
+      }),
+
+      cart: [],
+      addToCart: (item, qty, size, color, selectedImage) => set((state) => {
+        const cartItemId = `${item.id}-${size}-${color}`;
+        const existing = state.cart.find((p) => p.cartItemId === cartItemId);
+        
+        if (existing) {
+          return {
+            cart: state.cart.map((p) => 
+              p.cartItemId === cartItemId ? { ...p, quantity: p.quantity + qty } : p
+            )
+          };
+        }
+        return { cart: [...state.cart, { ...item, cartItemId, quantity: qty, size, color, selectedImage }] };
+      }),
+      removeFromCart: (cartItemId) => set((state) => ({
+        cart: state.cart.filter((p) => p.cartItemId !== cartItemId)
+      })),
+      updateQuantity: (cartItemId, qty) => set((state) => ({
+        cart: state.cart.map((p) => (p.cartItemId === cartItemId ? { ...p, quantity: Math.max(1, qty) } : p))
+      })),
+      removeCheckoutItems: (cartItemIds) => set((state) => ({
+        cart: state.cart.filter((p) => !cartItemIds.includes(p.cartItemId))
+      })),
     }),
     {
-      name: 'fashion-hub-storage', // ชื่อไฟล์ใน LocalStorage
+      name: 'fashion-hub-storage', 
     }
   )
 );

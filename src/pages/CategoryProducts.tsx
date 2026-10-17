@@ -13,7 +13,7 @@ interface Product {
 }
 
 export default function CategoryProducts() {
-  const { categoryName } = useParams(); // รับชื่อหมวดหมู่จาก URL (เช่น Tops, Bottoms, Accessories)
+  const { categoryName } = useParams(); 
   const navigate = useNavigate();
   const collection = useStore((state) => state.collection);
   const toggleCollection = useStore((state) => state.toggleCollection);
@@ -28,19 +28,16 @@ export default function CategoryProducts() {
 
   const products: Product[] = Array.isArray(data) ? data : (data.products || []);
 
-  // 🌟 กรองสินค้าให้ตรงกับหมวดหมู่ที่คลิกเข้ามา (เทียบแบบไม่สนตัวพิมพ์เล็กพิมพ์ใหญ่)
   const filteredProducts = products.filter(
     p => p.category.toLowerCase() === categoryName?.toLowerCase()
   );
 
   return (
     <div className="p-8 max-w-7xl mx-auto min-h-[80vh]">
-      {/* ปุ่มย้อนกลับ */}
       <button onClick={() => navigate(-1)} className="btn btn-ghost mb-6">
         ← ย้อนกลับหน้าแรก
       </button>
 
-      {/* Header หัวข้อหมวดหมู่ */}
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold mb-2 capitalize">Category: {categoryName}</h1>
         <p className="text-gray-500">พบสินค้าทั้งหมด {filteredProducts.length} รายการในหมวดหมู่นี้</p>
