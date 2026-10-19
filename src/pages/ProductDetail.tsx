@@ -38,12 +38,12 @@ export default function ProductDetail() {
 
   const { data: product, isLoading, error } = useQuery<Product>({
     queryKey: ['product', id],
-    queryFn: () => fetch(`https://my-json-server.typicode.com/Toey227/Fashion-Hub/products/${id}`).then(res => res.json())
+    queryFn: () => fetch('/db.json').then(res => res.json()).then(data => data.products.find((p: any) => String(p.id) === String(id)))
   });
 
   const { data: allProducts } = useQuery<Product[]>({
     queryKey: ['products'],
-    queryFn: () => fetch('https://my-json-server.typicode.com/Toey227/Fashion-Hub/products').then(res => res.json())
+    queryFn: () => fetch('/db.json').then(res => res.json()).then(data => data.products)
   });
 
   const relatedProducts = allProducts

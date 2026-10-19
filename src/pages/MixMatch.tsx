@@ -24,7 +24,7 @@ export default function MixMatch() {
  
   const { data, isLoading, error } = useQuery<any>({
     queryKey: ['products'],
-    queryFn: () => fetch('https://my-json-server.typicode.com/Toey227/Fashion-Hub/products').then(res => res.json())
+    queryFn: () => fetch('/db.json').then(res => res.json()).then(data => data.products)
   });
  
   const selectedTop = useStore((state) => state.mixMatch.top) as Product | null;
