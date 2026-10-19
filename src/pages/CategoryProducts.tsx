@@ -20,7 +20,7 @@ export default function CategoryProducts() {
 
   const { data, isLoading, error } = useQuery<any>({
     queryKey: ['products'],
-    queryFn: () => fetch('http://localhost:3000/products').then(res => res.json())
+    queryFn: () => fetch('https://my-json-server.typicode.com/Toey227/Fashion-Hub/products').then(res => res.json())
   });
 
   if (isLoading) return <div className="p-20 text-center flex justify-center"><span className="loading loading-spinner loading-lg"></span></div>;

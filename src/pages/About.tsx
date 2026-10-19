@@ -36,7 +36,7 @@ export default function About() {
 
             <div className="flex flex-wrap justify-center gap-2 mb-4">
               <span className="badge badge-primary badge-outline badge-lg font-medium">ชื่อเล่น: BINTOU</span>
-              <span className="badge badge-secondary badge-outline badge-lg font-medium">รหัสนักศึกษา: 1650707050</span>
+              <span className="badge badge-secondary badge-outline badge-lg font-medium font-sans">รหัสนักศึกษา: 1650707050</span>
             </div>
 
             <div className="w-full divider my-2 text-base-content/40 text-sm uppercase tracking-widest">Responsibilities</div>
@@ -79,7 +79,7 @@ export default function About() {
 
             <div className="flex flex-wrap justify-center gap-2 mb-4">
               <span className="badge badge-primary badge-outline badge-lg font-medium">ชื่อเล่น: TOEY</span>
-              <span className="badge badge-secondary badge-outline badge-lg font-medium">รหัสนักศึกษา: 1650702168</span>
+              <span className="badge badge-secondary badge-outline badge-lg font-medium font-sans">รหัสนักศึกษา: 1650702168</span>
             </div>
 
             <div className="w-full divider my-2 text-base-content/40 text-sm uppercase tracking-widest">Responsibilities</div>
@@ -121,7 +121,7 @@ export default function About() {
             <div>
               <h4 className="text-2xl font-bold mb-2">JSON Server (Mock API)</h4>
               <p className="text-base-content/70 mb-4 leading-relaxed">
-                จำลอง REST API (http://localhost:3000) ด้วยโครงสร้างข้อมูลจากไฟล์ <code>db.js</code> เพื่อใช้ดึงข้อมูลสินค้า แสดงผล และทดสอบระบบ E-Commerce ในสภาพแวดล้อมการพัฒนา (Development)
+                จำลอง REST API (https://my-json-server.typicode.com/Toey227/Fashion-Hub) ด้วยโครงสร้างข้อมูลจากไฟล์ <code>db.js</code> เพื่อใช้ดึงข้อมูลสินค้า แสดงผล และทดสอบระบบ E-Commerce ในสภาพแวดล้อมการพัฒนา (Development)
               </p>
               <a href="https://github.com/typicode/json-server" target="_blank" rel="noreferrer" className="btn btn-sm btn-outline btn-primary">
                 🔗 ดูเอกสารอ้างอิง JSON Server

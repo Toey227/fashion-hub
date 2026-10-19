@@ -19,7 +19,7 @@ export default function Home() {
 
   const { data, isLoading, error } = useQuery<any>({
     queryKey: ['products'],
-    queryFn: () => fetch('http://localhost:3000/products').then(res => res.json())
+    queryFn: () => fetch('https://my-json-server.typicode.com/Toey227/Fashion-Hub/products').then(res => res.json())
   });
 
 

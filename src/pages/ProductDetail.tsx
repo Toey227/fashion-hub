@@ -11,17 +11,20 @@ interface Product {
   image: string;
   description: string;
   rating: number;
-  variants?: string[];
+  variants?: string[]; 
+  selectedSize?: string;
+  selectedStyle?: string;
+  selectedImage?: string;
 }
 
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  
+
   const [quantity, setQuantity] = useState(1);
   const [showToast, setShowToast] = useState(false);
   const [selectedSize, setSelectedSize] = useState('M');
-  
+
   const [mainImage, setMainImage] = useState('');
   const [selectedVariant, setSelectedVariant] = useState('Default');
 
@@ -30,14 +33,17 @@ export default function ProductDetail() {
 
   const addToCart = useStore(state => state.addToCart);
 
+  const collection = useStore(state => state.collection);
+  const toggleCollection = useStore(state => state.toggleCollection);
+
   const { data: product, isLoading, error } = useQuery<Product>({
     queryKey: ['product', id],
-    queryFn: () => fetch(`http://localhost:3000/products/${id}`).then(res => res.json())
+    queryFn: () => fetch(`https://my-json-server.typicode.com/Toey227/Fashion-Hub/products/${id}`).then(res => res.json())
   });
 
   const { data: allProducts } = useQuery<Product[]>({
     queryKey: ['products'],
-    queryFn: () => fetch('http://localhost:3000/products').then(res => res.json())
+    queryFn: () => fetch('https://my-json-server.typicode.com/Toey227/Fashion-Hub/products').then(res => res.json())
   });
 
   const relatedProducts = allProducts
@@ -62,6 +68,8 @@ export default function ProductDetail() {
     }
   };
 
+  const isSaved = product ? collection.some(p => p.id === product.id) : false;
+
   if (isLoading) return <div className="p-10 text-center flex justify-center"><span className="loading loading-spinner loading-lg"></span></div>;
   if (error || !product) return <div className="p-10 text-center text-red-500 text-xl">ไม่พบสินค้าที่คุณค้นหา!</div>;
 
@@ -72,9 +80,9 @@ export default function ProductDetail() {
       </button>
 
       <div className="flex flex-col xl:flex-row gap-8">
-        
+
         <div className="flex-1 flex flex-col md:flex-row gap-12 bg-base-100 p-8 rounded-3xl shadow-sm border border-base-200">
-          
+
           <div className="md:w-1/2">
             <img
               src={mainImage}
@@ -117,9 +125,8 @@ export default function ProductDetail() {
                           setMainImage(variantUrl);
                           setSelectedVariant(styleName);
                         }}
-                        className={`w-14 h-14 rounded-full overflow-hidden border-2 transition-all duration-300 ${
-                          mainImage === variantUrl ? 'border-primary scale-110 shadow-lg' : 'border-transparent opacity-70 hover:opacity-100 hover:scale-105'
-                        }`}
+                        className={`w-14 h-14 rounded-full overflow-hidden border-2 transition-all duration-300 ${mainImage === variantUrl ? 'border-primary scale-110 shadow-lg' : 'border-transparent opacity-70 hover:opacity-100 hover:scale-105'
+                          }`}
                         title={styleName}
                       >
                         <img src={variantUrl} alt={styleName} className="w-full h-full object-cover" />
@@ -137,11 +144,10 @@ export default function ProductDetail() {
                   <button
                     key={size}
                     onClick={() => setSelectedSize(size)}
-                    className={`w-12 h-12 rounded-full font-bold transition-all ${
-                      selectedSize === size
-                        ? 'bg-primary text-white shadow-md scale-110' 
-                        : 'bg-base-200 text-base-content hover:bg-base-300' 
-                    }`}
+                    className={`w-12 h-12 rounded-full font-bold transition-all ${selectedSize === size
+                        ? 'bg-primary text-white shadow-md scale-110'
+                        : 'bg-base-200 text-base-content hover:bg-base-300'
+                      }`}
                   >
                     {size}
                   </button>
@@ -175,8 +181,15 @@ export default function ProductDetail() {
                 🛍️ Add to Cart
               </button>
 
-              <button className="btn btn-circle btn-outline border-base-300 h-12 w-12 hover:bg-red-50 hover:border-red-100 hover:text-red-500 transition-colors">
-                🤍
+              <button
+                onClick={() => product && toggleCollection(product)}
+                className={`btn btn-circle h-12 w-12 transition-colors ${isSaved
+                    ? 'bg-red-50 border-red-100 text-red-500 hover:bg-red-100 hover:border-red-200'
+                    : 'btn-outline border-base-300 hover:bg-red-50 hover:border-red-100 hover:text-red-500'
+                  }`}
+                title={isSaved ? "Remove from Collection" : "Save to Collection"}
+              >
+                {isSaved ? '❤️' : '🤍'}
               </button>
             </div>
 
@@ -187,19 +200,19 @@ export default function ProductDetail() {
           <h2 className="text-xl font-serif font-bold text-base-content mb-6 border-b-2 border-base-200 pb-2">
             You May Also Like
           </h2>
-          
+
           <div className="flex flex-col gap-4">
             {relatedProducts.map((relatedItem) => (
-              <Link 
-                key={relatedItem.id} 
+              <Link
+                key={relatedItem.id}
                 to={`/product/${relatedItem.id}`}
-                onClick={() => window.scrollTo(0, 0)} 
+                onClick={() => window.scrollTo(0, 0)}
                 className="flex items-center gap-4 p-3 bg-base-100 rounded-xl hover:shadow-md transition-all border border-transparent hover:border-primary/20 group"
               >
-                <img 
-                  src={relatedItem.image} 
-                  alt={relatedItem.title} 
-                  className="w-20 h-24 object-cover rounded-lg shadow-sm group-hover:scale-105 transition-transform" 
+                <img
+                  src={relatedItem.image}
+                  alt={relatedItem.title}
+                  className="w-20 h-24 object-cover rounded-lg shadow-sm group-hover:scale-105 transition-transform"
                 />
                 <div>
                   <h3 className="text-sm font-bold text-base-content line-clamp-2 leading-snug mb-1 group-hover:text-primary transition-colors">
@@ -225,7 +238,7 @@ export default function ProductDetail() {
           </div>
         </div>
       )}
-      
+
     </div>
   );
 }
