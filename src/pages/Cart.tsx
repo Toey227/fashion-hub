@@ -1,28 +1,96 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useStore } from '../store/useStore';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuthStore } from '../store/authStore';
+
+interface CartItemFromDB {
+  id: number;
+  userId: number;
+  productId: number;
+  selectedSize?: string;
+  selectedStyle?: string;
+  selectedImage?: string;
+  quantity?: number; // ถ้ามีเก็บ quantity ใน DB หรือจะกำหนด default เป็น 1
+}
 
 export default function Cart() {
-  const cart = useStore(state => state.cart);
-  const removeFromCart = useStore(state => state.removeFromCart);
-  const updateQuantity = useStore(state => state.updateQuantity);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const userId = useAuthStore(state => state.userId) || 1; // ใช้ userId 1 เป็นค่าเริ่มต้น
 
+  // 1. ดึงข้อมูลตะกร้าจาก Backend Database
+  const { data: dbCartItems = [], isLoading: isCartLoading } = useQuery<CartItemFromDB[]>({
+    queryKey: ['cart', userId],
+    queryFn: async () => {
+      const res = await fetch(`http://localhost:3000/api/cart/${userId}`);
+      if (!res.ok) throw new Error('Failed to fetch cart');
+      return res.json();
+    }
+  });
 
-  const [selectedIds, setSelectedIds] = useState<string[]>(cart.map(item => item.cartItemId));
+  // 2. ดึงข้อมูลสินค้าทั้งหมดจาก db.json เพื่อเอามาจับคู่แสดงรูปและชื่อสินค้า
+  const { data: allProducts = [], isLoading: isProductLoading } = useQuery<any[]>({
+    queryKey: ['products'],
+    queryFn: async () => {
+      const res = await fetch('/db.json');
+      const data = await res.json();
+      return data.products;
+    }
+  });
 
-  
-  const toggleSelect = (id: string) => {
+  // ผสานข้อมูล Cart จาก DB เข้ากับข้อมูล Product จาก db.json
+  const cartItems = dbCartItems.map(cartItem => {
+    const productInfo = allProducts.find((p: any) => p.id === cartItem.productId) || {};
+    return {
+      ...cartItem,
+      ...productInfo,
+      id: cartItem.id, // ใช้ ID ของตาราง Cart เป็นหลักสำหรับใช้ลบ
+      quantity: 1 // กำหนดจำนวนเริ่มต้นเป็น 1 (หรือปรับตามต้องการ)
+    };
+  });
+
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+
+  // อัปเดตรายการที่เลือกเมื่อข้อมูลโหลดเสร็จ
+  useEffect(() => {
+    if (cartItems.length > 0 && selectedIds.length === 0) {
+      setSelectedIds(cartItems.map(item => item.id));
+    }
+  }, [cartItems]);
+
+  const toggleSelect = (id: number) => {
     setSelectedIds(prev => 
       prev.includes(id) ? prev.filter(itemId => itemId !== id) : [...prev, id]
     );
   };
 
-  const totalPrice = cart
-    .filter(item => selectedIds.includes(item.cartItemId))
-    .reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  // 3. Mutation สำหรับลบสินค้าออกจาก Database
+  const deleteMutation = useMutation({
+    mutationFn: async (cartId: number) => {
+      const res = await fetch(`http://localhost:3000/api/cart/${cartId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete item');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cart', userId] });
+    },
+  });
 
-  if (cart.length === 0) {
+  const totalPrice = cartItems
+    .filter(item => selectedIds.includes(item.id))
+    .reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0);
+
+  if (isCartLoading || isProductLoading) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center">
+        <span className="loading loading-spinner loading-lg"></span>
+      </div>
+    );
+  }
+
+  if (cartItems.length === 0) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center bg-base-100 transition-colors duration-300">
         <span className="text-6xl mb-4">🛒</span>
@@ -35,19 +103,19 @@ export default function Cart() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 transition-colors duration-300">
-      <h1 className="text-4xl font-serif font-bold text-base-content mb-10 border-b-2 border-base-200 pb-4 tracking-tight">Shopping Cart</h1>
+      <h1 className="text-4xl font-serif font-bold text-base-content mb-10 border-b-2 border-base-200 pb-4 tracking-tight">Shopping Cart (Database)</h1>
       
       <div className="flex flex-col lg:flex-row gap-12">
         <div className="flex-1 space-y-6">
-          {cart.map((item) => (
-            <div key={item.cartItemId} className="flex gap-6 p-4 bg-base-100 rounded-xl border border-base-200 shadow-sm hover:shadow-md transition-shadow">
+          {cartItems.map((item) => (
+            <div key={item.id} className="flex gap-6 p-4 bg-base-100 rounded-xl border border-base-200 shadow-sm hover:shadow-md transition-shadow">
               
               <div className="flex items-center">
                 <input 
                   type="checkbox" 
                   className="checkbox checkbox-primary" 
-                  checked={selectedIds.includes(item.cartItemId)}
-                  onChange={() => toggleSelect(item.cartItemId)}
+                  checked={selectedIds.includes(item.id)}
+                  onChange={() => toggleSelect(item.id)}
                 />
               </div>
 
@@ -56,33 +124,35 @@ export default function Cart() {
               <div className="flex-1 flex flex-col justify-between py-2">
                 <div>
                   <div className="flex justify-between items-start">
-                    <h3 className="text-xl font-bold text-base-content line-clamp-1">{item.title}</h3>
-                    <button onClick={() => removeFromCart(item.cartItemId)} className="text-base-content/40 hover:text-red-500 transition-colors">
+                    <h3 className="text-xl font-bold text-base-content line-clamp-1">{item.title || 'สินค้าไม่ระบุชื่อ'}</h3>
+                    <button 
+                      onClick={() => deleteMutation.mutate(item.id)} 
+                      className="text-base-content/40 hover:text-red-500 transition-colors"
+                      title="ลบสินค้า"
+                    >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
                   </div>
                   
                   <div className="flex items-center gap-3 mt-2">
-                    <span className="badge badge-secondary badge-sm">{item.category}</span>
+                    <span className="badge badge-secondary badge-sm">{item.category || 'Fashion'}</span>
                     <span className="text-sm text-base-content/70">
-                      Size: <strong className="text-base-content text-base ml-1">{item.size}</strong>
+                      Size: <strong className="text-base-content text-base ml-1">{item.selectedSize || 'M'}</strong>
                     </span>
                     
-                    {item.color && (
+                    {item.selectedStyle && (
                       <span className="text-sm text-base-content/70 border-l border-base-300 pl-3">
-                        Color: <strong className="text-base-content text-base ml-1">{item.color}</strong>
+                        Style: <strong className="text-base-content text-base ml-1">{item.selectedStyle}</strong>
                       </span>
                     )}
                   </div>
                 </div>
                 
                 <div className="flex justify-between items-end mt-4">
-                  <p className="text-2xl font-bold text-primary font-sans">฿{item.price}</p>
+                  <p className="text-2xl font-bold text-primary font-sans">฿{item.price || 0}</p>
                   
-                  <div className="flex items-center border border-base-300 rounded-lg overflow-hidden h-10 bg-base-100">
-                    <button onClick={() => updateQuantity(item.cartItemId, item.quantity - 1)} className="w-10 h-full hover:bg-base-200 flex items-center justify-center font-bold text-base-content transition-colors">-</button>
-                    <div className="w-12 h-full flex items-center justify-center font-bold border-x border-base-300 text-base-content font-sans">{item.quantity}</div>
-                    <button onClick={() => updateQuantity(item.cartItemId, item.quantity + 1)} className="w-10 h-full hover:bg-base-200 flex items-center justify-center font-bold text-base-content transition-colors">+</button>
+                  <div className="flex items-center text-sm font-bold text-base-content/70">
+                    จำนวน: {item.quantity} ชิ้น
                   </div>
                 </div>
               </div>

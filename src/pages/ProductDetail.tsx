@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStore } from '../store/useStore';
+import { useAuthStore } from '../store/authStore'; // <-- เพิ่มการดึง AuthStore
 
 interface Product {
   id: number;
@@ -20,6 +21,7 @@ interface Product {
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient(); // <-- เพิ่ม QueryClient สำหรับรีเฟรชข้อมูลตะกร้า
 
   const [quantity, setQuantity] = useState(1);
   const [showToast, setShowToast] = useState(false);
@@ -31,11 +33,13 @@ export default function ProductDetail() {
   const increaseQty = () => setQuantity(prev => prev + 1);
   const decreaseQty = () => setQuantity(prev => (prev > 1 ? prev - 1 : 1));
 
-  const addToCart = useStore(state => state.addToCart);
+  // ดึง userId จาก AuthStore
+  const userId = useAuthStore(state => state.userId);
 
   const collection = useStore(state => state.collection);
   const toggleCollection = useStore(state => state.toggleCollection);
 
+  // ดึงข้อมูลสินค้าจาก db.json
   const { data: product, isLoading, error } = useQuery<Product>({
     queryKey: ['product', id],
     queryFn: () => fetch('/db.json').then(res => res.json()).then(data => data.products.find((p: any) => String(p.id) === String(id)))
@@ -60,11 +64,40 @@ export default function ProductDetail() {
     }
   }, [product]);
 
-  const handleAddToCart = () => {
-    if (product) {
-      addToCart(product, quantity, selectedSize, selectedVariant, mainImage);
+  // สร้าง Mutation สำหรับยิง API เข้า Backend Database
+  const addToCartMutation = useMutation({
+    mutationFn: async (cartData: any) => {
+      const res = await fetch('http://localhost:3000/api/cart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cartData),
+      });
+      if (!res.ok) throw new Error('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+      return res.json();
+    },
+    onSuccess: () => {
+      // สั่งรีเฟรชข้อมูลตะกร้าทันทีเมื่อบันทึกเสร็จ
+      queryClient.invalidateQueries({ queryKey: ['cart', userId] });
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3000);
+    },
+  });
+
+  // เปลี่ยนการทำงานของปุ่ม Add to Cart ให้ส่งไปที่ API
+  const handleAddToCart = () => {
+    if (!userId) {
+      alert('กรุณาเข้าสู่ระบบก่อนทำการเพิ่มสินค้า');
+      return;
+    }
+    if (product) {
+      // ส่งข้อมูลเข้า Database
+      addToCartMutation.mutate({
+        userId: userId,
+        productId: product.id,
+        selectedSize: selectedSize,
+        selectedStyle: selectedVariant,
+        selectedImage: mainImage
+      });
     }
   };
 
@@ -176,9 +209,10 @@ export default function ProductDetail() {
 
               <button
                 onClick={handleAddToCart}
+                disabled={addToCartMutation.isPending}
                 className="btn btn-primary flex-1 h-12 text-lg hover:scale-[1.02] transition-transform shadow-sm"
               >
-                🛍️ Add to Cart
+                {addToCartMutation.isPending ? '⏳ กำลังบันทึก...' : '🛍️ Add to Cart'}
               </button>
 
               <button
@@ -233,7 +267,7 @@ export default function ProductDetail() {
             <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span>เพิ่มสินค้าลงตะกร้าเรียบร้อยแล้ว! ({quantity} ชิ้น)</span>
+            <span>เพิ่มสินค้าลงตะกร้าเรียบร้อยแล้ว! (บันทึกลง Database แล้ว)</span>
             <Link to="/cart" className="btn btn-sm btn-ghost underline hover:bg-transparent text-white border-white">ดูตะกร้า</Link>
           </div>
         </div>

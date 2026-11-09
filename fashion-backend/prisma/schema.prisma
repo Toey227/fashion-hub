@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        Int        @id @default(autoincrement())
+  email     String     @unique
+  password  String     
+  carts     Cart[]
+  wishlists Wishlist[]
+}
+
+model Product {
+  id          Int        @id 
+  title       String
+  price       Float
+  category    String
+  image       String
+  description String
+  rating      Float
+  variants    String[]   
+  // ลบ carts และ wishlists ออกไปแล้ว
+}
+
+model Cart {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  productId     Int      // เก็บแค่เลขรหัสสินค้าพอ
+  selectedSize  String?
+  selectedStyle String?
+  selectedImage String?
+
+  user          User     @relation(fields: [userId], references: [id])
+}
+
+model Wishlist {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  productId Int      // เก็บแค่เลขรหัสสินค้าพอ
+
+  user      User     @relation(fields: [userId], references: [id])
+}
