@@ -8,7 +8,6 @@ const prisma = new PrismaClient();
 app.use(cors());
 app.use(express.json());
 
-// Endpoint 1: Health Check (สำหรับใช้ป้องกัน Supabase หลับ)
 app.get('/api/health', async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -18,14 +17,14 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Endpoint 2: Login แบบง่าย (ตามโจทย์การบ้าน)
+
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   
   try {
     let user = await prisma.user.findUnique({ where: { email } });
     
-    // ถ้ายอมให้สมัครใหม่ตอนล็อกอินได้เลย (เพื่อความง่ายในการเทสต์) ให้ใช้โค้ดส่วนนี้
+   
     if (!user) {
       user = await prisma.user.create({
         data: { email, password }
@@ -42,7 +41,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Endpoint 3: ดึงข้อมูลตะกร้าสินค้าของ User นั้นๆ
+
 app.get('/api/cart/:userId', async (req, res) => {
   const { userId } = req.params;
   try {
@@ -55,12 +54,18 @@ app.get('/api/cart/:userId', async (req, res) => {
   }
 });
 
-// Endpoint 4: เพิ่มสินค้าลงตะกร้า
+
 app.post('/api/cart', async (req, res) => {
-  const { userId, productId } = req.body;
+  const { userId, productId, selectedSize, selectedStyle, selectedImage } = req.body;
   try {
     const newItem = await prisma.cart.create({
-      data: { userId: Number(userId), productId: Number(productId) }
+      data: { 
+        userId: Number(userId), 
+        productId: Number(productId),
+        selectedSize,
+        selectedStyle,
+        selectedImage
+      }
     });
     res.json(newItem);
   } catch (error) {
@@ -68,16 +73,74 @@ app.post('/api/cart', async (req, res) => {
   }
 });
 
-// Endpoint 5: ลบสินค้าออกจากตะกร้า
-app.get('/api/cart/:userId', async (req, res) => {
+app.delete('/api/cart/:cartId', async (req, res) => {
+  const { cartId } = req.params;
+  try {
+    await prisma.cart.delete({
+      where: { id: Number(cartId) }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete item from cart' });
+  }
+});
+
+
+app.get('/api/wishlist/:userId', async (req, res) => {
   const { userId } = req.params;
   try {
-    const cartItems = await prisma.cart.findMany({
+    const wishlists = await prisma.wishlist.findMany({
       where: { userId: Number(userId) }
     });
-    res.json(cartItems);
+    res.json(wishlists);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch cart' });
+    res.status(500).json({ error: 'Failed to fetch wishlist' });
+  }
+});
+
+
+app.post('/api/wishlist/toggle', async (req, res) => {
+  const { userId, productId } = req.body;
+  try {
+    const existingItem = await prisma.wishlist.findFirst({
+      where: { userId: Number(userId), productId: Number(productId) }
+    });
+
+    if (existingItem) {
+     
+      await prisma.wishlist.delete({ where: { id: existingItem.id } });
+      res.json({ success: true, action: 'removed' });
+    } else {
+      
+      await prisma.wishlist.create({
+        data: { userId: Number(userId), productId: Number(productId) }
+      });
+      res.json({ success: true, action: 'added' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to toggle wishlist' });
+  }
+});
+
+app.get('/api/products', async (req, res) => {
+  try {
+    const products = await prisma.product.findMany();
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch products' });
+  }
+});
+
+app.get('/api/products/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const product = await prisma.product.findUnique({
+      where: { id: Number(id) }
+    });
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+    res.json(product);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch product' });
   }
 });
 
@@ -89,3 +152,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on http://localhost:${PORT}`);
 });
+

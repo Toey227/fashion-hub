@@ -8,6 +8,7 @@ import MixMatch from "./pages/MixMatch";
 import CategoryProducts from './pages/CategoryProducts';
 import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
+import Login from './pages/Login';
 import { useEffect, useState } from 'react';
 
 function AppContent() {
@@ -88,6 +89,7 @@ function AppContent() {
           <Route path="/category/:categoryName" element={<CategoryProducts />} />
           <Route path="/cart" element={<Cart />} />
           <Route path="/checkout" element={<Checkout />} />
+          <Route path="/login" element={<Login />} />
         </Routes>
       </main>
     </>

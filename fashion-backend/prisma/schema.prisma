@@ -9,11 +9,17 @@ datasource db {
 }
 
 model User {
-  id        Int        @id @default(autoincrement())
-  email     String     @unique
-  password  String     
-  carts     Cart[]
-  wishlists Wishlist[]
+  id        Int       @id @default(autoincrement())
+  name      String?   
+  email     String    @unique 
+  password  String    
+  role      String    @default("customer") 
+  
+  carts     Cart[]    
+  wishlists Wishlist[] 
+  
+  createdAt DateTime  @default(now()) 
+  updatedAt DateTime  @updatedAt      
 }
 
 model Product {
@@ -25,13 +31,12 @@ model Product {
   description String
   rating      Float
   variants    String[]   
-  // ลบ carts และ wishlists ออกไปแล้ว
 }
 
 model Cart {
   id            Int      @id @default(autoincrement())
   userId        Int
-  productId     Int      // เก็บแค่เลขรหัสสินค้าพอ
+  productId     Int     
   selectedSize  String?
   selectedStyle String?
   selectedImage String?
@@ -42,7 +47,7 @@ model Cart {
 model Wishlist {
   id        Int      @id @default(autoincrement())
   userId    Int
-  productId Int      // เก็บแค่เลขรหัสสินค้าพอ
+  productId Int      
 
   user      User     @relation(fields: [userId], references: [id])
 }

@@ -1,5 +1,5 @@
-// src/store/authStore.ts
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 interface AuthState {
   userId: number | null;
@@ -7,8 +7,15 @@ interface AuthState {
   logout: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  userId: 1, // จำลองว่า Login ด้วย User ID 1 อยู่
-  login: (id) => set({ userId: id }),
-  logout: () => set({ userId: null }),
-}));
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      userId: null, 
+      login: (id) => set({ userId: id }),
+      logout: () => set({ userId: null }),
+    }),
+    {
+      name: 'auth-storage', 
+    }
+  )
+);

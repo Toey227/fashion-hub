@@ -1,7 +1,7 @@
-import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { useStore } from '../store/useStore';
+import { Link, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
+import { useAuthStore } from '../store/authStore';
 
 interface Product {
   id: number;
@@ -14,19 +14,46 @@ interface Product {
 }
 
 export default function Home() {
-  const collection = useStore((state) => state.collection);
-  const toggleCollection = useStore((state) => state.toggleCollection);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.userId);
 
-  const { data, isLoading, error } = useQuery<any>({
-    queryKey: ['products'],
-    queryFn: () => fetch('/db.json').then(res => res.json()).then(data => data.products)
+  // 1. ดึงข้อมูลสินค้าทั้งหมดจาก db.json
+ const { data, isLoading, error } = useQuery<any>({
+  queryKey: ['products'],
+  queryFn: () => fetch('http://localhost:3000/api/products').then(res => res.json())
+});
+
+  // 2. ดึงข้อมูล Wishlist จาก Database
+  const { data: wishlistData = [] } = useQuery<any[]>({
+    queryKey: ['wishlist', userId],
+    queryFn: async () => {
+      if (!userId) return [];
+      const res = await fetch(`http://localhost:3000/api/wishlist/${userId}`);
+      return res.json();
+    },
+    enabled: !!userId, // ทำงานเมื่อล็อกอินแล้วเท่านั้น
   });
 
+  // 3. Mutation สำหรับกดหัวใจ (Toggle Wishlist)
+  const toggleWishlistMutation = useMutation({
+    mutationFn: async (productId: number) => {
+      const res = await fetch('http://localhost:3000/api/wishlist/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, productId }),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      // อัปเดต UI ทันทีเมื่อเพิ่ม/ลบสำเร็จ
+      queryClient.invalidateQueries({ queryKey: ['wishlist', userId] });
+    },
+  });
 
   const products: Product[] = Array.isArray(data) ? data : (data?.products || []);
 
   const { seasonalProducts, popularProducts } = useMemo(() => {
-
     if (products.length === 0) return { seasonalProducts: [], popularProducts: [] };
 
     const shuffled = [...products].sort(() => 0.5 - Math.random());
@@ -36,23 +63,32 @@ export default function Home() {
     };
   }, [products]);
 
+  const handleToggleCollection = (productId: number) => {
+    if (!userId) {
+      alert('กรุณาเข้าสู่ระบบก่อนบันทึกรายการโปรด');
+      navigate('/login');
+      return;
+    }
+    toggleWishlistMutation.mutate(productId);
+  };
+
   if (isLoading) return <div className="p-20 text-center flex justify-center"><span className="loading loading-spinner loading-lg"></span></div>;
   if (error || !data) return <div className="p-20 text-center text-red-500 text-xl">ไม่สามารถโหลดข้อมูลสินค้าได้</div>;
 
-
-
   const renderProductCard = (item: Product) => {
-    const isSaved = collection.some(p => p.id === item.id);
+    // เช็กว่าสินค้านี้อยู่ใน Database Wishlist หรือไม่
+    const isSaved = wishlistData.some((w: any) => w.productId === item.id);
+    
     return (
       <div key={item.id} className="card bg-base-100 shadow-xl border border-base-200 relative pt-4 px-4 hover:shadow-2xl transition-all duration-300 group overflow-hidden">
-
-
+        
         <Link to={`/product/${item.id}`} className="absolute inset-0 z-10"></Link>
 
-        {/* ปุ่มหัวใจ */}
+        {/* ปุ่มหัวใจ เชื่อม Database แล้ว */}
         <button
           className="btn btn-circle btn-sm bg-white/80 hover:bg-white text-gray-700 border-none absolute top-6 right-6 z-20 shadow-md"
-          onClick={() => toggleCollection(item)}
+          onClick={() => handleToggleCollection(item.id)}
+          disabled={toggleWishlistMutation.isPending}
           title="Save to Collection"
         >
           {isSaved ? <span className="text-red-500">❤️</span> : <span>🤍</span>}
@@ -87,10 +123,10 @@ export default function Home() {
           <h1 className="text-4xl md:text-5xl font-serif mb-4 leading-tight">
             Welcome To<br />Fashion Hub
           </h1>
-          <p className="text font-serif -gray-400 text-sm mb-8 leading-relaxed max-w-sm">
+          <p className="text font-serif text-gray-400 text-sm mb-8 leading-relaxed max-w-sm">
             Discover your perfect style with our curated collection of premium fashion pieces.
           </p>
-          <Link to="/mix-match" className="bg-[#C88A76] text-white font-serif px-8 py-3 text-sm font-medium w-fit hover:bg-[#b57a66] transition-colors inline-block text-center">
+          <Link to="/mix-match" className="bg-[#C88A76] text-white font-serif px-8 py-3 text-sm font-medium w-fit hover:bg-[#b57a66] transition-colors inline-block text-center z-20">
             Shop Now
           </Link>
         </div>
@@ -164,4 +200,3 @@ export default function Home() {
     </div>
   );
 }
-

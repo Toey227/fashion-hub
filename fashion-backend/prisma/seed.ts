@@ -1,5 +1,9 @@
-{
-  "products": [
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+async function main() {
+  const productsData = [
     {
       "id": 1,
       "title": "Classic T-Shirt",
@@ -560,5 +564,36 @@
         "https://images.unsplash.com/photo-1675947258177-aa8120ddefa3?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=NHwxMjA3fDA%3D"
       ]
     }
-  ]
+  ];
+
+  console.log('🌱 กำลังเริ่มนำข้อมูลเข้า Database (Seeding)...');
+
+  for (const product of productsData) {
+    // ใช้ upsert เพื่อกันข้อมูลซ้ำ (ถ้ามี ID นี้แล้วจะข้าม, ถ้ายังไม่มีจะสร้างใหม่)
+    await prisma.product.upsert({
+      where: { id: product.id },
+      update: {},
+      create: {
+        id: product.id,
+        title: product.title,
+        price: product.price,
+        category: product.category,
+        image: product.image,
+        description: product.description,
+        rating: product.rating,
+        variants: product.variants || [], // ถ้าไม่มี variants ให้ส่ง Array ว่าง
+      },
+    });
+  }
+
+  console.log('✅ นำข้อมูลสินค้าลง Database สำเร็จแล้ว!');
 }
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

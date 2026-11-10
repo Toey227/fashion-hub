@@ -10,48 +10,51 @@ interface CartItemFromDB {
   selectedSize?: string;
   selectedStyle?: string;
   selectedImage?: string;
-  quantity?: number; // ถ้ามีเก็บ quantity ใน DB หรือจะกำหนด default เป็น 1
+  quantity?: number; 
 }
 
 export default function Cart() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const userId = useAuthStore(state => state.userId) || 1; // ใช้ userId 1 เป็นค่าเริ่มต้น
+  
+  // ดึง userId จาก AuthStore (ถ้ายังไม่ล็อกอินจะเป็น null)
+  const userId = useAuthStore(state => state.userId); 
 
-  // 1. ดึงข้อมูลตะกร้าจาก Backend Database
+  // 1. ดึงข้อมูลตะกร้าจาก Backend Database (ดึงเฉพาะตอนที่ Login แล้ว)
   const { data: dbCartItems = [], isLoading: isCartLoading } = useQuery<CartItemFromDB[]>({
     queryKey: ['cart', userId],
     queryFn: async () => {
+      if (!userId) return []; // ป้องกันการดึงข้อมูลถ้ายังไม่ล็อกอิน
       const res = await fetch(`http://localhost:3000/api/cart/${userId}`);
       if (!res.ok) throw new Error('Failed to fetch cart');
       return res.json();
-    }
+    },
+    enabled: !!userId // Query จะทำงานก็ต่อเมื่อ userId มีค่าเท่านั้น
   });
 
-  // 2. ดึงข้อมูลสินค้าทั้งหมดจาก db.json เพื่อเอามาจับคู่แสดงรูปและชื่อสินค้า
+  // 2. ดึงข้อมูลสินค้าทั้งหมดจาก db.json
   const { data: allProducts = [], isLoading: isProductLoading } = useQuery<any[]>({
     queryKey: ['products'],
     queryFn: async () => {
-      const res = await fetch('/db.json');
+      const res = await fetch('http://localhost:3000/api/products');
       const data = await res.json();
-      return data.products;
+      return data; // คืนค่า data ตรงๆ ได้เลยครับ
     }
   });
 
-  // ผสานข้อมูล Cart จาก DB เข้ากับข้อมูล Product จาก db.json
+  // ผสานข้อมูล
   const cartItems = dbCartItems.map(cartItem => {
     const productInfo = allProducts.find((p: any) => p.id === cartItem.productId) || {};
     return {
       ...cartItem,
       ...productInfo,
-      id: cartItem.id, // ใช้ ID ของตาราง Cart เป็นหลักสำหรับใช้ลบ
-      quantity: 1 // กำหนดจำนวนเริ่มต้นเป็น 1 (หรือปรับตามต้องการ)
+      id: cartItem.id, 
+      quantity: 1 
     };
   });
 
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
-  // อัปเดตรายการที่เลือกเมื่อข้อมูลโหลดเสร็จ
   useEffect(() => {
     if (cartItems.length > 0 && selectedIds.length === 0) {
       setSelectedIds(cartItems.map(item => item.id));
@@ -82,6 +85,18 @@ export default function Cart() {
     .filter(item => selectedIds.includes(item.id))
     .reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0);
 
+  // 🌟 เช็กว่าถ้ายังไม่ Login ให้แสดงหน้าแจ้งเตือน
+  if (!userId) {
+    return (
+      <div className="min-h-[70vh] flex flex-col items-center justify-center bg-base-100 transition-colors duration-300">
+        <span className="text-6xl mb-4">🔒</span>
+        <h2 className="text-3xl font-bold text-base-content mb-2">กรุณาเข้าสู่ระบบ</h2>
+        <p className="text-base-content/60 mb-6">คุณต้องเข้าสู่ระบบก่อนจึงจะสามารถดูตะกร้าสินค้าได้</p>
+        <Link to="/login" className="btn btn-primary px-8">ไปหน้า Login</Link>
+      </div>
+    );
+  }
+
   if (isCartLoading || isProductLoading) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center">
@@ -103,7 +118,7 @@ export default function Cart() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 transition-colors duration-300">
-      <h1 className="text-4xl font-serif font-bold text-base-content mb-10 border-b-2 border-base-200 pb-4 tracking-tight">Shopping Cart (Database)</h1>
+      <h1 className="text-4xl font-serif font-bold text-base-content mb-10 border-b-2 border-base-200 pb-4 tracking-tight">Shopping Cart</h1>
       
       <div className="flex flex-col lg:flex-row gap-12">
         <div className="flex-1 space-y-6">

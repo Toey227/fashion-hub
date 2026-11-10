@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useStore } from '../store/useStore';
-import { useAuthStore } from '../store/authStore'; // <-- เพิ่มการดึง AuthStore
+import { useAuthStore } from '../store/authStore';
 
 interface Product {
   id: number;
@@ -21,7 +20,7 @@ interface Product {
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const queryClient = useQueryClient(); // <-- เพิ่ม QueryClient สำหรับรีเฟรชข้อมูลตะกร้า
+  const queryClient = useQueryClient();
 
   const [quantity, setQuantity] = useState(1);
   const [showToast, setShowToast] = useState(false);
@@ -33,21 +32,27 @@ export default function ProductDetail() {
   const increaseQty = () => setQuantity(prev => prev + 1);
   const decreaseQty = () => setQuantity(prev => (prev > 1 ? prev - 1 : 1));
 
-  // ดึง userId จาก AuthStore
   const userId = useAuthStore(state => state.userId);
 
-  const collection = useStore(state => state.collection);
-  const toggleCollection = useStore(state => state.toggleCollection);
-
-  // ดึงข้อมูลสินค้าจาก db.json
   const { data: product, isLoading, error } = useQuery<Product>({
-    queryKey: ['product', id],
-    queryFn: () => fetch('/db.json').then(res => res.json()).then(data => data.products.find((p: any) => String(p.id) === String(id)))
-  });
+  queryKey: ['product', id],
+  queryFn: () => fetch(`http://localhost:3000/api/products/${id}`).then(res => res.json())
+});
 
-  const { data: allProducts } = useQuery<Product[]>({
-    queryKey: ['products'],
-    queryFn: () => fetch('/db.json').then(res => res.json()).then(data => data.products)
+const { data: allProducts } = useQuery<Product[]>({
+  queryKey: ['products'],
+  queryFn: () => fetch('http://localhost:3000/api/products').then(res => res.json())
+});
+
+  // 1. ดึงข้อมูล Wishlist เพื่อแสดงสถานะปุ่มหัวใจให้ถูกต้อง
+  const { data: wishlistData = [] } = useQuery<any[]>({
+    queryKey: ['wishlist', userId],
+    queryFn: async () => {
+      if (!userId) return [];
+      const res = await fetch(`http://localhost:3000/api/wishlist/${userId}`);
+      return res.json();
+    },
+    enabled: !!userId,
   });
 
   const relatedProducts = allProducts
@@ -64,7 +69,6 @@ export default function ProductDetail() {
     }
   }, [product]);
 
-  // สร้าง Mutation สำหรับยิง API เข้า Backend Database
   const addToCartMutation = useMutation({
     mutationFn: async (cartData: any) => {
       const res = await fetch('http://localhost:3000/api/cart', {
@@ -76,21 +80,34 @@ export default function ProductDetail() {
       return res.json();
     },
     onSuccess: () => {
-      // สั่งรีเฟรชข้อมูลตะกร้าทันทีเมื่อบันทึกเสร็จ
       queryClient.invalidateQueries({ queryKey: ['cart', userId] });
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3000);
     },
   });
 
-  // เปลี่ยนการทำงานของปุ่ม Add to Cart ให้ส่งไปที่ API
+  // 2. Mutation สำหรับกดหัวใจ (Toggle Wishlist) ใน Database
+  const toggleWishlistMutation = useMutation({
+    mutationFn: async (productId: number) => {
+      const res = await fetch('http://localhost:3000/api/wishlist/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, productId }),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wishlist', userId] });
+    },
+  });
+
   const handleAddToCart = () => {
     if (!userId) {
       alert('กรุณาเข้าสู่ระบบก่อนทำการเพิ่มสินค้า');
+      navigate('/login');
       return;
     }
     if (product) {
-      // ส่งข้อมูลเข้า Database
       addToCartMutation.mutate({
         userId: userId,
         productId: product.id,
@@ -101,7 +118,17 @@ export default function ProductDetail() {
     }
   };
 
-  const isSaved = product ? collection.some(p => p.id === product.id) : false;
+  const handleToggleCollection = (productId: number) => {
+    if (!userId) {
+      alert('กรุณาเข้าสู่ระบบก่อนบันทึกรายการโปรด');
+      navigate('/login');
+      return;
+    }
+    toggleWishlistMutation.mutate(productId);
+  };
+
+  // 3. เช็กว่าสินค้าชิ้นนี้อยู่ใน Database Wishlist หรือไม่
+  const isSaved = product ? wishlistData.some((w: any) => w.productId === product.id) : false;
 
   if (isLoading) return <div className="p-10 text-center flex justify-center"><span className="loading loading-spinner loading-lg"></span></div>;
   if (error || !product) return <div className="p-10 text-center text-red-500 text-xl">ไม่พบสินค้าที่คุณค้นหา!</div>;
@@ -216,7 +243,8 @@ export default function ProductDetail() {
               </button>
 
               <button
-                onClick={() => product && toggleCollection(product)}
+                onClick={() => product && handleToggleCollection(product.id)}
+                disabled={toggleWishlistMutation.isPending}
                 className={`btn btn-circle h-12 w-12 transition-colors ${isSaved
                     ? 'bg-red-50 border-red-100 text-red-500 hover:bg-red-100 hover:border-red-200'
                     : 'btn-outline border-base-300 hover:bg-red-50 hover:border-red-100 hover:text-red-500'
@@ -267,7 +295,7 @@ export default function ProductDetail() {
             <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span>เพิ่มสินค้าลงตะกร้าเรียบร้อยแล้ว! (บันทึกลง Database แล้ว)</span>
+            <span>เพิ่มสินค้าลงตะกร้าเรียบร้อยแล้ว!</span>
             <Link to="/cart" className="btn btn-sm btn-ghost underline hover:bg-transparent text-white border-white">ดูตะกร้า</Link>
           </div>
         </div>

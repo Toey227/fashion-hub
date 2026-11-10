@@ -1,8 +1,9 @@
 import { useState, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
- 
+import { useAuthStore } from '../store/authStore';
+
 interface Product {
   id: number;
   title: string;
@@ -16,52 +17,51 @@ interface Product {
   selectedStyle?: string;
   selectedImage?: string;
 }
- 
+
 export default function MixMatch() {
   const navigate = useNavigate();
-  const toggleCollection = useStore((state) => state.toggleCollection);
-  const addToCart = useStore((state) => state.addToCart);
- 
+  const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.userId);
+
+  // ดึงสินค้าจาก Backend/db.json
   const { data, isLoading, error } = useQuery<any>({
     queryKey: ['products'],
     queryFn: () => fetch('/db.json').then(res => res.json()).then(data => data.products)
   });
- 
+
+  // ใช้ Zustand จัดการ State ของหน้า Mix & Match (แต่เวลาเซฟจะส่งเข้า Database)
   const selectedTop = useStore((state) => state.mixMatch.top) as Product | null;
   const selectedBottom = useStore((state) => state.mixMatch.bottom) as Product | null;
   const selectedAccessory = useStore((state) => state.mixMatch.accessory) as Product | null;
   const setMixMatch = useStore((state) => state.setMixMatch);
- 
+
   const setSelectedTop = (item: Product | null) => setMixMatch('top', item);
   const setSelectedBottom = (item: Product | null) => setMixMatch('bottom', item);
   const setSelectedAccessory = (item: Product | null) => setMixMatch('accessory', item);
- 
-  
+
   const modalRef = useRef<HTMLDialogElement>(null);
   const [tempProduct, setTempProduct] = useState<Product | null>(null);
   const [selectedSize, setSelectedSize] = useState<string>('M');
-  const [selectedStyleIndex, setSelectedStyleIndex] = useState<number>(0); // 0 = Style 1, 1 = Style 2, 2 = Style 3
+  const [selectedStyleIndex, setSelectedStyleIndex] = useState<number>(0);
   const [currentImage, setCurrentImage] = useState<string>('');
- 
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
- 
+
   const showToast = (message: string, type: 'success' | 'info') => {
     setToast({ show: true, message, type });
     setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 2500);
   };
- 
+
   const handleSelectProduct = (item: Product) => {
     setTempProduct(item);
     setSelectedSize(item.category === 'Accessories' ? 'Free Size' : 'M');
     setSelectedStyleIndex(0); 
-   
     
     const initialImg = (item.variants && item.variants.length > 0) ? item.variants[0] : item.image;
     setCurrentImage(initialImg);
- 
+
     modalRef.current?.showModal();
   };
- 
+
   const handleStyleChange = (index: number) => {
     setSelectedStyleIndex(index);
     if (tempProduct?.variants && tempProduct.variants[index]) {
@@ -70,11 +70,10 @@ export default function MixMatch() {
       setCurrentImage(tempProduct.image);
     }
   };
- 
- 
+
   const handleConfirmSelection = () => {
     if (!tempProduct) return;
- 
+
     const styleName = `Style ${selectedStyleIndex + 1}`;
     const productWithDetails: Product = {
       ...tempProduct,
@@ -83,7 +82,7 @@ export default function MixMatch() {
       selectedSize,
       selectedStyle: styleName
     };
- 
+
     if (tempProduct.category === 'Tops') {
       setSelectedTop(productWithDetails);
     } else if (tempProduct.category === 'Bottoms') {
@@ -91,57 +90,109 @@ export default function MixMatch() {
     } else if (tempProduct.category === 'Accessories') {
       setSelectedAccessory(productWithDetails);
     }
- 
+
     modalRef.current?.close();
     setTempProduct(null);
   };
- 
-  if (isLoading) return <div className="p-20 text-center flex justify-center"><span className="loading loading-spinner loading-lg"></span></div>;
-  if (error || !data) return <div className="p-20 text-center text-red-500 text-xl">ไม่สามารถโหลดข้อมูลสินค้าได้</div>;
- 
-  const products: Product[] = Array.isArray(data) ? data : (data.products || []);
+
+  // --- API Mutations ---
+  const addToCartMutation = useMutation({
+    mutationFn: async (cartItems: any[]) => {
+      const promises = cartItems.map(item =>
+        fetch('http://localhost:3000/api/cart', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(item),
+        })
+      );
+      await Promise.all(promises);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cart', userId] });
+      showToast(`🛍️ เพิ่มลุคนี้ลงตะกร้าเรียบร้อย! (รวม ${totalCount} ชิ้น)`, 'success');
+    }
+  });
+
+  const saveLookbookMutation = useMutation({
+    mutationFn: async (productIds: number[]) => {
+      const promises = productIds.map(productId =>
+        fetch('http://localhost:3000/api/wishlist/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, productId }),
+        })
+      );
+      await Promise.all(promises);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wishlist', userId] });
+      showToast('💖 บันทึกลุคสไตล์คุณลง My Collection แล้ว!', 'info');
+      setTimeout(() => {
+        navigate('/collection');
+      }, 1500);
+    }
+  });
+
+  const products: Product[] = Array.isArray(data) ? data : (data?.products || []);
   const tops = products.filter(p => p.category === 'Tops');
   const bottoms = products.filter(p => p.category === 'Bottoms');
   const accessories = products.filter(p => p.category === 'Accessories');
- 
+
   const totalPrice = (selectedTop?.price || 0) + (selectedBottom?.price || 0) + (selectedAccessory?.price || 0);
   const totalCount = (selectedTop ? 1 : 0) + (selectedBottom ? 1 : 0) + (selectedAccessory ? 1 : 0);
- 
+
   const handleAddAllToCart = () => {
+    if (!userId) {
+      alert('กรุณาเข้าสู่ระบบก่อนทำการเพิ่มสินค้า');
+      navigate('/login');
+      return;
+    }
+    
+    const cartPayloads = [];
     if (selectedTop) {
-      addToCart(selectedTop, 1, selectedTop.selectedSize || 'M', selectedTop.selectedStyle || 'Style 1', selectedTop.selectedImage || selectedTop.image);
+      cartPayloads.push({ userId, productId: selectedTop.id, selectedSize: selectedTop.selectedSize || 'M', selectedStyle: selectedTop.selectedStyle || 'Style 1', selectedImage: selectedTop.selectedImage || selectedTop.image });
     }
     if (selectedBottom) {
-      addToCart(selectedBottom, 1, selectedBottom.selectedSize || 'M', selectedBottom.selectedStyle || 'Style 1', selectedBottom.selectedImage || selectedBottom.image);
+      cartPayloads.push({ userId, productId: selectedBottom.id, selectedSize: selectedBottom.selectedSize || 'M', selectedStyle: selectedBottom.selectedStyle || 'Style 1', selectedImage: selectedBottom.selectedImage || selectedBottom.image });
     }
     if (selectedAccessory) {
-      addToCart(selectedAccessory, 1, selectedAccessory.selectedSize || 'Free Size', selectedAccessory.selectedStyle || 'Style 1', selectedAccessory.selectedImage || selectedAccessory.image);
+      cartPayloads.push({ userId, productId: selectedAccessory.id, selectedSize: selectedAccessory.selectedSize || 'Free Size', selectedStyle: selectedAccessory.selectedStyle || 'Style 1', selectedImage: selectedAccessory.selectedImage || selectedAccessory.image });
     }
-   
-    showToast(`🛍️ เพิ่มลุคนี้ลงตะกร้าเรียบร้อย! (รวม ${totalCount} ชิ้น)`, 'success');
+    
+    if (cartPayloads.length > 0) {
+      addToCartMutation.mutate(cartPayloads);
+    }
   };
- 
+
   const handleSaveOutfit = () => {
-    if (selectedTop) toggleCollection(selectedTop);
-    if (selectedBottom) toggleCollection(selectedBottom);
-    if (selectedAccessory) toggleCollection(selectedAccessory);
- 
-    showToast('💖 บันทึกลุคสไตล์คุณลง My Collection แล้ว!', 'info');
- 
-    setTimeout(() => {
-      navigate('/collection');
-    }, 1500);
+    if (!userId) {
+      alert('กรุณาเข้าสู่ระบบก่อนทำการบันทึกรายการโปรด');
+      navigate('/login');
+      return;
+    }
+
+    const productIds = [];
+    if (selectedTop) productIds.push(selectedTop.id);
+    if (selectedBottom) productIds.push(selectedBottom.id);
+    if (selectedAccessory) productIds.push(selectedAccessory.id);
+
+    if (productIds.length > 0) {
+      saveLookbookMutation.mutate(productIds);
+    }
   };
- 
+
+  if (isLoading) return <div className="p-20 text-center flex justify-center"><span className="loading loading-spinner loading-lg"></span></div>;
+  if (error || !data) return <div className="p-20 text-center text-red-500 text-xl">ไม่สามารถโหลดข้อมูลสินค้าได้</div>;
+
   const availableSizes = tempProduct?.category === 'Accessories'
     ? ['Free Size']
     : ['S', 'M', 'L', 'XL'];
- 
+
   const styleOptions = ['Style 1', 'Style 2', 'Style 3'];
- 
+
   return (
     <div className="p-8 max-w-7xl mx-auto min-h-[85vh] relative">
-     
+      
       {toast.show && (
         <div className="toast toast-top toast-center z-50 animate-fade-in-down">
           <div className={`alert ${toast.type === 'success' ? 'alert-success text-white' : 'alert-info text-white'} shadow-lg font-bold`}>
@@ -149,10 +200,10 @@ export default function MixMatch() {
           </div>
         </div>
       )}
- 
+
       <dialog ref={modalRef} className="modal backdrop-blur-sm">
         <div className="modal-box max-w-lg p-7 rounded-3xl shadow-2xl border border-base-200">
-         
+          
           <div className="flex justify-between items-center border-b pb-3 mb-5">
             <h3 className="font-extrabold text-xl text-base-content flex items-center gap-2">
               ✨ ปรับแต่งตัวเลือกสินค้า
@@ -164,11 +215,11 @@ export default function MixMatch() {
               ✕
             </button>
           </div>
- 
+
           {tempProduct && (
             <div className="space-y-6">
-             
-           
+              
+            
               <div className="flex items-center gap-4 bg-base-200/50 p-4 rounded-2xl border border-base-200">
                 <img
                   src={currentImage}
@@ -183,8 +234,8 @@ export default function MixMatch() {
                   <p className="text-xl font-black text-primary font-sans">฿{tempProduct.price}</p>
                 </div>
               </div>
- 
-           
+
+            
               <div className="text-left">
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">
                   🎨 เลือกสไตล์ (STYLE OPTION):
@@ -206,7 +257,7 @@ export default function MixMatch() {
                   ))}
                 </div>
               </div>
- 
+
     
               <div className="text-left">
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">
@@ -229,10 +280,10 @@ export default function MixMatch() {
                   ))}
                 </div>
               </div>
- 
+
             </div>
           )}
- 
+
           <div className="modal-action mt-8 pt-4 border-t flex justify-end gap-3">
             <button
               className="btn btn-ghost rounded-xl px-6"
@@ -247,21 +298,21 @@ export default function MixMatch() {
               บันทึกลง Preview ➔
             </button>
           </div>
- 
+
         </div>
       </dialog>
- 
+
       <div className="text-center mb-10">
         <h1 className="text-4xl font-bold mb-2">Mix & Match Lookbook</h1>
         <p className="text-gray-500">เลือกไอเท็มโปรดเพื่อจัดเซ็ตลุคสไตล์คุณ</p>
       </div>
- 
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-       
+        
   
         <div className="lg:col-span-7 space-y-6">
-         
-   
+          
+    
           <div className="bg-base-100 p-6 rounded-2xl shadow-sm border border-base-200">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-bold">👕 เลือกเสื้อ (Tops)</h2>
@@ -329,10 +380,10 @@ export default function MixMatch() {
         <div className="lg:col-span-5">
           <div className="bg-base-100 p-8 rounded-3xl shadow-xl border border-base-200 sticky top-8 flex flex-col">
             <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Curated Lookbook</h2>
-           
+            
             <div className="grid grid-cols-3 gap-4 mb-6">
-             
-         
+              
+          
               <div className="flex flex-col items-center bg-base-200/50 p-3 rounded-2xl border border-base-200 relative">
                 {selectedTop ? (
                   <>
@@ -421,17 +472,17 @@ export default function MixMatch() {
             <div className="space-y-3">
               <button
                 onClick={handleAddAllToCart}
-                disabled={totalCount === 0}
-                className="btn btn-primary w-full text-lg shadow-md"
+                disabled={totalCount === 0 || addToCartMutation.isPending}
+                className="btn btn-primary w-full text-lg shadow-md disabled:opacity-70"
               >
-                🛍️ Add All to Cart
+                {addToCartMutation.isPending ? '⏳ กำลังเพิ่มลงตะกร้า...' : '🛍️ Add All to Cart'}
               </button>
               <button
                 onClick={handleSaveOutfit}
-                disabled={totalCount === 0}
-                className="btn btn-outline btn-secondary w-full"
+                disabled={totalCount === 0 || saveLookbookMutation.isPending}
+                className="btn btn-outline btn-secondary w-full disabled:opacity-70"
               >
-                💾 Save Lookbook
+                {saveLookbookMutation.isPending ? '⏳ กำลังบันทึก...' : '💾 Save Lookbook'}
               </button>
             </div>
  

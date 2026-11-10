@@ -1,24 +1,49 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useStore } from '../store/useStore';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuthStore } from '../store/authStore';
 
 export default function Checkout() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
+  const userId = useAuthStore(state => state.userId);
 
+  // รับรายการ ID สินค้าที่ถูกเลือกมาจากหน้า Cart
+  const selectedIds: number[] = location.state?.selectedIds || [];
 
-  const selectedIds = location.state?.selectedIds || [];
-  const removeCheckoutItems = useStore(state => state.removeCheckoutItems);
+  // Mutation สำหรับจัดการคำสั่งซื้อ (ลบสินค้าที่สั่งออกจากตะกร้าใน Database)
+  const checkoutMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      // วนลูปยิง API ลบสินค้าตาม ID ที่เลือกไว้พร้อมๆ กัน
+      const deletePromises = ids.map(cartId =>
+        fetch(`http://localhost:3000/api/cart/${cartId}`, {
+          method: 'DELETE',
+        })
+      );
+      await Promise.all(deletePromises);
+    },
+    onSuccess: () => {
+      // อัปเดตข้อมูลตะกร้าใหม่ และแสดงหน้าต่างสำเร็จ
+      queryClient.invalidateQueries({ queryKey: ['cart', userId] });
+      setShowSuccessModal(true);
+    },
+    onError: (error) => {
+      console.error('เกิดข้อผิดพลาดในการสั่งซื้อ:', error);
+      alert('เกิดข้อผิดพลาดในการสั่งซื้อ กรุณาลองใหม่อีกครั้ง');
+    }
+  });
 
   const handleConfirmOrder = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (selectedIds.length > 0) {
-      removeCheckoutItems(selectedIds);
+      // ยิง API ลบข้อมูลเมื่อกดยืนยัน
+      checkoutMutation.mutate(selectedIds);
+    } else {
+      setShowSuccessModal(true);
     }
-
-    setShowSuccessModal(true);
   };
 
   return (
@@ -26,7 +51,6 @@ export default function Checkout() {
       <h1 className="text-4xl font-bold text-center mb-10">Checkout & Shipping</h1>
 
       <form onSubmit={handleConfirmOrder} className="flex flex-col lg:flex-row gap-8">
-
 
         <div className="flex-1 bg-base-100 p-8 rounded-3xl border border-base-200 shadow-sm">
           <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
@@ -72,8 +96,12 @@ export default function Checkout() {
             </div>
           </div>
 
-          <button type="submit" className="btn btn-primary w-full mt-8 text-lg rounded-xl h-14 shadow-md hover:scale-[1.02] transition-transform">
-            Confirm Order (ยืนยันคำสั่งซื้อ)
+          <button 
+            type="submit" 
+            disabled={checkoutMutation.isPending}
+            className="btn btn-primary w-full mt-8 text-lg rounded-xl h-14 shadow-md hover:scale-[1.02] transition-transform disabled:opacity-70"
+          >
+            {checkoutMutation.isPending ? '⏳ กำลังประมวลผล...' : 'Confirm Order (ยืนยันคำสั่งซื้อ)'}
           </button>
         </div>
       </form>
