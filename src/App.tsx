@@ -54,6 +54,7 @@ function AppContent() {
             <li><Link to="/collection" className={navLinkClass("/collection")}>My Collection</Link></li>
             <li><Link to="/mix-match" className={navLinkClass("/mix-match")}>Mix & Match</Link></li>
             <li><Link to="/about" className={navLinkClass("/about")}>About Us</Link></li>
+            <li><Link to="/login" className={navLinkClass("/login")}>Login</Link></li>
 
             <div className={`h-4 w-px mx-2 ${theme === 'dark' ? 'bg-gray-600' : 'bg-gray-300'}`}></div>
 
